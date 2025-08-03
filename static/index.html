@@ -23,7 +23,8 @@ img {
   <img id="img" src="/live" alt="Live image" />
   <script>
     const img = document.getElementById('img')
-    const ws = new WebSocket(`ws://${location.host}/ws`)
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const ws = new WebSocket(`${protocol}//${location.host}/ws`)
     ws.onmessage = (event) => {
       console.log('live image updated')
       const url = `/live?t=${new Date().getTime()}`
