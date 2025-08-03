@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Live image</title>
+  <style>
+body {
+  background-color: black;
+  margin: 0;
+}
+img {
+  max-width: 100vw;
+  max-height: 100vh;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+} 
+  </style>
+</head>
+
+<body>
+  <img id="img" src="/live" alt="Live image" />
+  <script>
+    const img = document.getElementById('img')
+    const ws = new WebSocket(`ws://${location.host}/ws`)
+    ws.onmessage = (event) => {
+      console.log('live image updated')
+      const url = `/live?t=${new Date().getTime()}`
+      img.src = url
+    }
+  </script>
+</body>
+
+</html>
