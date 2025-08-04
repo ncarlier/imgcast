@@ -21,14 +21,37 @@ body {
   position: fixed;
   bottom: 0;
   right: 0;
-} 
+}
+#fs-btn {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  opacity: 0.2;
+}
+#fs-btn:hover {
+  opacity: 1;
+}
+#fs-btn:fullscreen {
+  display: none;
+}
   </style>
 </head>
 
 <body>
+  <button id="fs-btn" onclick="toggleFullScreen()">Toggle Fullscreen</button>
   <img id="img" src="/live" alt="Live image" />
   <span id="status">Loading...</span>
   <script>
+    function toggleFullScreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen()
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen()
+        }
+      }
+    }
     const img = document.getElementById('img')
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
     const ws = new WebSocket(`${protocol}//${location.host}/ws`)
