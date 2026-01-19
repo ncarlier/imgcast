@@ -16,12 +16,22 @@ This is a lightweight server written in **Go** that allows real-time sharing of 
 - `Make` for building
 - `curl` or any HTTP client to test uploads
 
+## Environment Variables
+
+| Variable | Description | Default | Example |
+|----------|-------------|---------|---------|
+| `API_KEY` | API key for upload authentication | `secret` | `SECRET123` |
+| `PORT` | Server port | `8080` | `3000` |
+| `BASE_PATH` | Base path for hosting under subdirectory | `/` | `/imgcast/` |
+
 ## Setup & Run
 
-Set your API key
+Set your API key and optionally configure the port and base path
 
 ```bash
 export API_KEY=SECRET123
+export PORT=8080        # Optional, defaults to 8080
+export BASE_PATH=/      # Optional, defaults to / (root path)
 ```
 
 Start the server
@@ -30,7 +40,7 @@ Start the server
 ./imgcast
 ```
 
-The server runs at `http://localhost:8080`.
+The server runs at `http://localhost:8080` by default, or on the port specified by the `PORT` environment variable. Use `BASE_PATH` to host the application under a subdirectory (e.g., `BASE_PATH=/imgcast/` will make it available at `http://localhost:8080/imgcast/`).
 
 ## Usage
 

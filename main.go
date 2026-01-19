@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -9,9 +10,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
-
-	"github.com/gorilla/websocket"
 )
 
 //go:embed static
@@ -22,14 +23,19 @@ const (
 	LiveDataFilename = "imgcast.data"
 )
 
+type sseClient struct {
+	w       http.ResponseWriter
+	flusher http.Flusher
+}
+
 var (
 	staticServer http.Handler
-	clients      = make(map[*websocket.Conn]bool)
+	clients      = make(map[*sseClient]bool)
 	broadcast    = make(chan struct{})
-	upgrader     = websocket.Upgrader{}
 	mu           sync.Mutex
 	imagePath    string
 	apiKey       string
+	basePath     string
 )
 
 func init() {
@@ -43,20 +49,69 @@ func init() {
 		slog.Warn("API_KEY is not set, using default key")
 		apiKey = "secret"
 	}
+	basePath = getBasePath()
+}
+
+// getPort returns the port from environment variable or default port
+func getPort() string {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	// Validate port is a valid number
+	if _, err := strconv.Atoi(port); err != nil {
+		slog.Warn("Invalid PORT value, using default", "port", port)
+		port = "8080"
+	}
+	return ":" + port
+}
+
+// getBasePath returns the base path from environment variable
+func getBasePath() string {
+	path := os.Getenv("BASE_PATH")
+	if path == "" {
+		return "/"
+	}
+	// Ensure base path starts with / and ends with /
+	if path[0] != '/' {
+		path = "/" + path
+	}
+	if path[len(path)-1] != '/' {
+		path = path + "/"
+	}
+	return path
+}
+
+// joinPath joins base path with a relative path
+func joinPath(relativePath string) string {
+	if basePath == "/" {
+		return relativePath
+	}
+	return strings.TrimSuffix(basePath, "/") + relativePath
 }
 
 func main() {
-	http.Handle("/", staticServer)
-	http.HandleFunc("/upload", handleUpload)
-	http.HandleFunc("/ws", handleWebSocket)
-	http.HandleFunc("/live", func(w http.ResponseWriter, r *http.Request) {
+	// Setup routes with base path support
+	if basePath == "/" {
+		http.Handle("/", staticServer)
+	} else {
+		http.Handle(basePath, http.StripPrefix(strings.TrimSuffix(basePath, "/"), staticServer))
+	}
+
+	http.HandleFunc(joinPath("/upload"), handleUpload)
+	http.HandleFunc(joinPath("/events"), handleSSE)
+	http.HandleFunc(joinPath("/live"), func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
 		http.ServeFile(w, r, filepath.Join(os.TempDir(), LiveDataFilename))
 	})
 
 	go broadcaster()
 
-	slog.Info("Starting server on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	port := getPort()
+	slog.Info("Starting server", "port", port, "basePath", basePath)
+	log.Fatal(http.ListenAndServe(port, nil))
 }
 
 func handleUpload(w http.ResponseWriter, r *http.Request) {
@@ -107,43 +162,52 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	upgrader.CheckOrigin = func(r *http.Request) bool { return true }
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Println("WebSocket error:", err)
+func handleSSE(w http.ResponseWriter, r *http.Request) {
+	// Set SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "SSE not supported", http.StatusInternalServerError)
 		return
 	}
-	defer conn.Close()
+
+	client := &sseClient{
+		w:       w,
+		flusher: flusher,
+	}
 
 	mu.Lock()
-	clients[conn] = true
-	if imagePath != "" {
-		conn.WriteMessage(websocket.TextMessage, []byte(imagePath))
-	}
+	clients[client] = true
 	mu.Unlock()
 
-	for {
-		if _, _, err := conn.NextReader(); err != nil {
-			mu.Lock()
-			delete(clients, conn)
-			mu.Unlock()
-			break
-		}
-	}
+	// Send initial message
+	fmt.Fprintf(w, "data: connected\n\n")
+	flusher.Flush()
+
+	// Keep connection alive until client disconnects
+	<-r.Context().Done()
+
+	mu.Lock()
+	delete(clients, client)
+	mu.Unlock()
 }
 
 func broadcaster() {
 	for {
 		<-broadcast
-		slog.Info("Broadcasting update to clients")
+		slog.Info("Broadcasting update to clients", "count", len(clients))
 		mu.Lock()
-		for conn := range clients {
-			err := conn.WriteMessage(websocket.TextMessage, []byte("updated"))
+		for client := range clients {
+			_, err := fmt.Fprintf(client.w, "data: updated\n\n")
 			if err != nil {
-				conn.Close()
-				delete(clients, conn)
+				delete(clients, client)
+				continue
 			}
+			client.flusher.Flush()
 		}
 		mu.Unlock()
 	}

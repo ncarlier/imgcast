@@ -32,7 +32,7 @@ ARG ARTIFACT=imgcast
 # Install backend binary
 COPY --from=backend-builder /go/src/$REPOSITORY/$ARTIFACT/release/$ARTIFACT /usr/local/bin/$ARTIFACT
 
-# Exposed ports
+# Exposed ports (configurable via PORT environment variable, defaults to 8080)
 EXPOSE 8080
 
 # Define entrypoint

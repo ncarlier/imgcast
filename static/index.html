@@ -4,6 +4,9 @@
 <head>
   <meta charset="UTF-8">
   <title>Live image</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Live image viewer">
+  <link rel="icon" type="image/png" href="./favicon.ico"/>
   <style>
 body {
   background-color: black;
@@ -42,26 +45,10 @@ body {
 
 <body>
   <button id="fs-btn" onclick="toggleFullScreen()">Toggle Fullscreen</button>
-  <img id="img" src="/live" alt="Live image" />
+  <img id="img" src="./live" alt="Live image" />
   <span id="status">Loading...</span>
   <script>
-    function toggleFullScreen() {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen()
-      } else {
-        if (document.exitFullscreen) {
-          document.exitFullscreen()
-        }
-      }
-    }
-    const img = document.getElementById('img')
-    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws = new WebSocket(`${protocol}//${location.host}/ws`)
-    ws.onmessage = (event) => {
-      console.log('live image updated')
-      const url = `/live?t=${new Date().getTime()}`
-      img.src = url
-    }
+    // Debug and error functions
     const status = document.getElementById('status')
     const debug = (message) => {
       console.debug(message)
@@ -71,6 +58,44 @@ body {
       console.error(message)
       status.textContent = message
     }
+    // Fullscreen toggle
+    const toggleFullScreen = () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen()
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen()
+        }
+      }
+    }
+    // Global variables
+    const img = document.getElementById('img')
+    const basePath = location.pathname.endsWith('/') ? location.pathname : location.pathname + '/'
+    const eventsUrl = `${basePath}events`
+    const updateImg = () => {
+      const url = `${basePath}live?t=${new Date().getTime()}`
+      img.src = url
+    }
+    // SSE connection to notify image updates
+    const openEventSource = (eventsUrl) => {
+      const eventSource = new EventSource(eventsUrl)
+      eventSource.onopen = () => {
+        debug('Connected to live updates')
+      }
+      eventSource.onmessage = (event) => {
+        if (event.data === 'updated') {
+          console.log('live image updated')
+          updateImg()
+        }
+      }
+      eventSource.onerror = (err) => {
+        error('Connection error, reconnecting...')
+        console.error('EventSource error:', err)
+      }
+      return eventSource
+    }
+    let es = openEventSource(eventsUrl)
+    // Keep screen awake
     if ('wakeLock' in navigator) {
       let wakeLock = null
       debug('Screen Wake Lock API is supported')
