@@ -45,7 +45,7 @@ body {
 
 <body>
   <button id="fs-btn" onclick="toggleFullScreen()">Toggle Fullscreen</button>
-  <img id="img" src="./live" alt="Live image" />
+  <img id="img" alt="Live image" />
   <span id="status">Loading...</span>
   <script>
     // Debug and error functions
@@ -76,6 +76,8 @@ body {
       const url = `${basePath}live?t=${new Date().getTime()}`
       img.src = url
     }
+    // Initial image load
+    updateImg()
     // SSE connection to notify image updates
     const openEventSource = (eventsUrl) => {
       const eventSource = new EventSource(eventsUrl)

@@ -46,6 +46,7 @@ jobs:
           release/imgcast-linux-arm64.tgz
           release/imgcast-linux-arm.tgz
           release/imgcast-darwin-amd64.tgz
+          release/imgcast-windows-amd64.tgz
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
